@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Sentiment + Recommendation Demo</title>
+<style>
+body { font-family: Arial; margin: 2rem; background: #f9f9f9; }
+form { margin-bottom: 2rem; padding: 1rem; background: #fff; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);}
+label { display:block; margin-top:1rem; font-weight:bold; }
+input, textarea { width:100%; padding:0.5rem; margin-top:0.3rem; border:1px solid #ccc; border-radius:4px;}
+button { margin-top:1rem; padding:0.7rem 1.2rem; border:none; background:#007BFF; color:#fff; border-radius:4px; cursor:pointer;}
+button:hover { background:#0056b3; }
+#results { margin-top: 2rem; }
+table { width:100%; border-collapse: collapse; margin-top:1rem;}
+th, td { border:1px solid #ccc; padding:0.5rem; text-align:left; }
+th { background:#eee; }
+</style>
+<script>
+async function sendRequest(event){
+    event.preventDefault();
+    const text = document.getElementById("text").value;
+    const user = document.getElementById("user").value;
+    const item = document.getElementById("item").value;
+    const payload = { text, user, item };
+
+    const res = await fetch("/api/predict", {
+        method: "POST",
+        headers: { "Content-Type":"application/json" },
+        body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    displayResults(data);
+}
+
+function displayResults(data){
+    const sentimentDiv = document.getElementById("sentiment");
+    sentimentDiv.innerHTML = `<strong>Sentiment:</strong> ${data.sentiment.label} 
+    ${data.sentiment.prob_positive !== null ? `(Probability: ${data.sentiment.prob_positive.toFixed(2)})` : ""}`;
+
+    const tableDiv = document.getElementById("recommendations");
+    if(data.recommendations.length){
+        let html = `<table><tr><th>Title</th><th>Score</th></tr>`;
+        data.recommendations.forEach(r => {
+            html += `<tr><td>${r.title}</td><td>${r.score.toFixed(2)}</td></tr>`;
+        });
+        html += `</table>`;
+        tableDiv.innerHTML = html;
+    } else {
+        tableDiv.innerHTML = "No recommendations available.";
+    }
+}
+</script>
+</head>
+<body>
+<h2>Sentiment + Recommendation System</h2>
+<form onsubmit="sendRequest(event)">
+<label for="text">Enter Text (Sentiment Analysis):</label>
+<textarea id="text" rows="3"></textarea>
+
+<label for="user">Enter User Name (User-based Recommendations):</label>
+<input type="text" id="user" placeholder="e.g., Alice">
+
+<label for="item">Enter Item Name (Item-based Recommendations):</label>
+<input type="text" id="item" placeholder="e.g., iPhone 14">
+
+<button type="submit">Submit</button>
+</form>
+
+<div id="results">
+<div id="sentiment"></div>
+<div id="recommendations"></div>
+</div>
+</body>
+</html>
