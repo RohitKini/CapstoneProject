@@ -28,23 +28,41 @@ def index():
 @app.route("/api/predict", methods=["POST"])
 def predict():
     data = request.json or request.form
-    text = (data.get("text") or "").strip()
+    
     user_name = (data.get("user") or "").strip().lower()
     item_name = (data.get("item") or "").strip().lower()
+    review_text = (data.get("review") or "").strip().lower()
 
     # --- Sentiment ---
     sentiment = {"label": "neutral", "prob_positive": None}
-    if text:
-        vec = TFIDF.transform([text])
-        pred = RF_MODEL.predict(vec)[0]
-        prob = float(RF_MODEL.predict_proba(vec)[0][1]) if hasattr(RF_MODEL, "predict_proba") else None
-        sentiment = {"label": "positive" if pred == 1 else "negative", "prob_positive": prob}
+
+    if review_text:
+        try:
+            vec = TFIDF.transform([review_text])
+            pred = RF_MODEL.predict(vec)[0]
+
+            prob = None
+            if hasattr(RF_MODEL, "predict_proba"):
+                probs = RF_MODEL.predict_proba(vec)[0]
+                if 1 in RF_MODEL.classes_:
+                    pos_index = list(RF_MODEL.classes_).index(1)
+                    prob = float(probs[pos_index])
+
+            sentiment = {
+                "label": "positive" if pred == 1 else "negative",
+                "prob_positive": prob
+            }
+        except Exception as e:
+            sentiment = {"label": "error", "prob_positive": None, "message": str(e)}
 
     # --- Dynamic Recommendations ---
     recs_dict = {}
 
-    # User-based recommendations
-    user_id = next((uid for uid, info in USER_META.items() if info.get("name", "").lower() == user_name), None)
+    # User-based recommendations (contains instead of exact match)
+    user_id = next(
+        (uid for uid, info in USER_META.items() if user_name in info.get("username", "").lower()),
+        None
+    )
     if user_id and user_id in USER_ITEM.index:
         user_row = USER_ITEM.loc[user_id]
         liked = user_row[user_row >= 4].index.tolist()
@@ -55,10 +73,16 @@ def predict():
             scores[list(user_row[user_row > 0].index)] = -1
             scores = scores.sort_values(ascending=False).head(10)
             for idx in scores.index:
-                recs_dict[idx] = {"score": float(scores.loc[idx]), "title": META.get(idx, {}).get("name", str(idx))}
+                recs_dict[idx] = {
+                    "score": float(scores.loc[idx]),
+                    "title": META.get(idx, {}).get("name", str(idx))
+                }
 
-    # Item-based recommendations
-    item_id = next((iid for iid, info in META.items() if info.get("name", "").lower() == item_name), None)
+    # Item-based recommendations (contains instead of exact match)
+    item_id = next(
+        (iid for iid, info in META.items() if item_name in info.get("name", "").lower()),
+        None
+    )
     if item_id and item_id in ITEM_SIM.columns:
         scores = ITEM_SIM[item_id].sort_values(ascending=False).head(6)
         for idx in scores.index:
@@ -66,16 +90,23 @@ def predict():
                 if idx in recs_dict:
                     recs_dict[idx]["score"] += float(scores.loc[idx])
                 else:
-                    recs_dict[idx] = {"score": float(scores.loc[idx]), "title": META.get(idx, {}).get("name", str(idx))}
+                    recs_dict[idx] = {
+                        "score": float(scores.loc[idx]),
+                        "title": META.get(idx, {}).get("name", str(idx))
+                    }
 
     # Fallback popular items
     if not recs_dict:
         avg = USER_ITEM.replace(0, float("nan")).mean().sort_values(ascending=False).head(5)
         for i in avg.index:
-            recs_dict[i] = {"score": float(avg.loc[i]), "title": META.get(i, {}).get("name", str(i))}
+            recs_dict[i] = {
+                "score": float(avg.loc[i]),
+                "title": META.get(i, {}).get("name", str(i))
+            }
 
     recs = sorted(recs_dict.values(), key=lambda x: x["score"], reverse=True)[:5]
 
     return jsonify({"sentiment": sentiment, "recommendations": recs, "mode": "dynamic"})
 
-if __name__ == "__main__": app.run(debug=True, host="0.0.0.0", port=5000)
+if __name__ == "__main__":
+    app.run(debug=True, host="0.0.0.0", port=5000)
