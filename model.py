@@ -50,6 +50,40 @@ def item_based_recommendations(item_name, user_item_matrix, item_similarity_df, 
     recommended_items = sorted(item_scores.items(), key=lambda x: x[1], reverse=True)
     return [item for item, score in recommended_items[:n_recommendations]]
 
+# def get_recommendations_for_user(username, n_recommendations=5):
+#     recommendations = []
+#     predicted_sentiments_list = []
+
+#     if user_item_matrix is None or item_similarity_df is None:
+#         return [("Recommendation system not initialized.", "")]
+
+#     if username not in user_item_matrix.index:
+#         return [(f"User '{username}' not found.", "")]
+
+#     user_rated_items = user_item_matrix.loc[username][user_item_matrix.loc[username] > 0].index.tolist()
+#     if not user_rated_items:
+#         return [("No items rated by user.", "")]
+
+#     seed_item = user_rated_items[0]
+#     recommended_items = item_based_recommendations(seed_item, user_item_matrix, item_similarity_df, n_recommendations)
+
+#     if rf_clf is not None and tfidf_vectorizer is not None and df is not None:
+#         for item_name in recommended_items:
+#             item_reviews = df[df['name'] == item_name]['reviews_text_preprocessed']
+#             if not item_reviews.empty:
+#                 tfidf_reviews = tfidf_vectorizer.transform(item_reviews)
+#                 preds = rf_clf.predict(tfidf_reviews)
+#                 positive_pct = (preds == 'Positive').sum() / len(preds) * 100
+#                 recommendations.append(item_name)
+#                 predicted_sentiments_list.append(f"{positive_pct:.2f}% Positive")
+#             else:
+#                 recommendations.append(item_name)
+#                 predicted_sentiments_list.append("N/A (No reviews)")
+#     else:
+#         predicted_sentiments_list = ["Sentiment N/A"] * len(recommended_items)
+
+#     return list(zip(recommendations, predicted_sentiments_list))
+
 def get_recommendations_for_user(username, n_recommendations=5):
     recommendations = []
     predicted_sentiments_list = []
@@ -75,11 +109,21 @@ def get_recommendations_for_user(username, n_recommendations=5):
                 preds = rf_clf.predict(tfidf_reviews)
                 positive_pct = (preds == 'Positive').sum() / len(preds) * 100
                 recommendations.append(item_name)
-                predicted_sentiments_list.append(f"{positive_pct:.2f}% Positive")
+                predicted_sentiments_list.append(positive_pct)
             else:
                 recommendations.append(item_name)
-                predicted_sentiments_list.append("N/A (No reviews)")
+                predicted_sentiments_list.append(-1)  # use -1 for "no reviews"
     else:
-        predicted_sentiments_list = ["Sentiment N/A"] * len(recommended_items)
+        predicted_sentiments_list = [0] * len(recommended_items)
 
-    return list(zip(recommendations, predicted_sentiments_list))
+    # Combine and sort by sentiment score (descending)
+    combined = list(zip(recommendations, predicted_sentiments_list))
+    combined_sorted = sorted(combined, key=lambda x: x[1], reverse=True)
+
+    # Format percentage nicely before returning
+    final_output = [
+        (item, f"{score:.2f}% Positive" if score >= 0 else "N/A (No reviews)")
+        for item, score in combined_sorted
+    ]
+
+    return final_output

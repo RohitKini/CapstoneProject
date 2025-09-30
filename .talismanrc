@@ -1,0 +1,4 @@
+fileignoreconfig:
+- filename: model.py
+  checksum: c92419a93b8e0a9c1699e162d47d5bae05ad4d0b788aa16254f4d1c3dbea20b1
+version: "1.0"
